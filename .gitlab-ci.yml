@@ -1,0 +1,78 @@
+#image: registry.apux.ru/devops/android-builder/app:latest
+#
+#variables:
+#  APP_NAME: "com.scroller.ledtext"
+#
+#cache:
+#  key: ${CI_PROJECT_ID}
+#  paths:
+#    - .m2/
+#    - .gradle/
+#
+#stages:
+#  - build
+#  #  - test
+#  - package
+#
+#before_script:
+#  - export GRADLE_USER_HOME=$(pwd)/.gradle
+#  - chmod +x ./gradlew
+#  - sdkmanager --install
+#    "cmake;3.10.2.4988404"
+#  - 'which ssh-agent || ( apt install openssh-client -y )'
+#  - eval $(ssh-agent -s)
+#  - echo "$GITLAB_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+#  - mkdir -p ~/.ssh
+#  - chmod 700 ~/.ssh
+#  - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+#  - ls -l ~/.ssh
+#  - git submodule update --init --recursive
+#
+#########################################################################
+## BUILD
+#
+#.build_template: &build
+#  stage: build
+#  artifacts:
+#    expire_in: 4 hours
+#    paths:
+#      - app/build/outputs/
+#
+#
+#build:release:
+#  <<: *build
+#  only:
+#    - com.scroller.ledtext
+#  script:
+#    - echo "keystorePath=./../key.jks" > signing.properties
+#    - echo "keystorePassword=passpass" >> signing.properties
+#    - echo "keyAlias=jimmy" >> signing.properties
+#    - echo "keyPassword=passpass" >> signing.properties
+#    - cat signing.properties
+#    - ./gradlew app:bundleRelease --stacktrace
+#
+## PACKAGE
+#
+#.package_template: &package
+#  before_script:
+#    - export VERSION_NAME=`egrep '^[[:blank:]]+versionName[[:blank:]]'  app/build.gradle | awk '{print $2}' | sed s/\"//g`
+#    - mkdir -p exported
+#
+#
+#package:release:
+#  <<: *package
+#  stage: package
+#  environment: Release
+#  only:
+#    - com.scroller.ledtext
+#  script:
+#    - curl -F document=@"app/build/outputs/bundle/release/app-release.aab" https://api.telegram.org/${BOT_TOKEN}/sendDocument?chat_id=${APP_CHAT_ID} -F caption="${APP_NAME} ${VERSION_NAME} SIGNED
+#      ${CI_COMMIT_MESSAGE}"
+#  #    - mv app/build/outputs/bundle/release/app.apk ./exported/${APP_NAME}-v$VERSION_NAME-release.apk
+#  #    - echo $APK_PATH
+#  dependencies:
+#    - build:release
+#  artifacts:
+#    expire_in: 1 month
+#    paths:
+#      - exported
